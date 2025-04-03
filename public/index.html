@@ -294,7 +294,7 @@
      * VARIÁVEIS GLOBAIS E ESTADO
      ***********************************************/
     let modo = "single";  // "single" ou "multi"
-    let saldo = 100;      // Saldo local para Single Player; para Multiplayer, o servidor gerencia
+    let saldo = 100;      // Saldo local para Single Player; Multiplayer é gerenciado pelo servidor
     let totalJogadas = 0;
     let totalApostado = 0;
     let totalGanho = 0;
@@ -307,6 +307,7 @@
     let isSpinning = false;
     let socket = null;
     let countdown = 20;   // Timer para o giro automático (Multiplayer)
+    let fallbackTimeout = null;  // Para limpar fallback quando resultado chegar
 
     const lobbyDiv = document.getElementById("lobby");
     const gameDiv = document.getElementById("game");
@@ -326,7 +327,7 @@
     const wheelRadius = 130;
     const totalSegments = 37;
     const segmentAngle = (2 * Math.PI) / totalSegments;
-    let currentAngle = 0; // A roleta permanece fixa
+    let currentAngle = 0; // roleta fixa
     const ballTrackRadius = wheelRadius + 20;
     let ballAngle = 0; // Ângulo da bolinha
 
@@ -335,7 +336,6 @@
       for (let i = 0; i < totalSegments; i++) {
         const startAngle = angle + i * segmentAngle;
         const endAngle = startAngle + segmentAngle;
-        const cor = (i === 0) ? "green" : (i % 2 === 0 ? "preto" : "vermelho");
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
         ctx.arc(centerX, centerY, wheelRadius, startAngle, endAngle);
@@ -381,11 +381,11 @@
     }
 
     /************************************************
-     * ANIMAÇÃO DO GIRO DA BOLINHA (A roleta permanece fixa)
+     * ANIMAÇÃO DO GIRO DA BOLINHA (roleta fixa)
      ***********************************************/
     function animateSpin(finalBallAngle, duration, callback) {
       const startBallAngle = ballAngle;
-      const extraRotations = 5;
+      const extraRotations = 8; // aumento para efeito realista
       const targetAngle = finalBallAngle + extraRotations * 2 * Math.PI;
       const startTime = performance.now();
 
@@ -458,7 +458,6 @@
      ***********************************************/
     document.getElementById("btnGirar").addEventListener("click", () => {
       if (isSpinning) return;
-      // Em Multiplayer, bloqueia giro manual se o timer não chegou a 0
       if (modo === "multi" && countdown > 0) {
         alert("Aguarde o timer chegar a 0 para girar a roleta.");
         return;
@@ -466,15 +465,22 @@
       isSpinning = true;
       resultadoEl.innerHTML = "";
       countdown = 20;
-
+      
       if (modo === "multi" && socket) {
         bets.forEach(b => socket.emit("apostar", b));
         socket.emit("girar");
         bets = [];
         document.querySelectorAll(".chip").forEach(chip => chip.remove());
+        // Guarda o fallback para limpar caso o resultado chegue
+        fallbackTimeout = setTimeout(() => {
+          if (isSpinning) {
+            isSpinning = false;
+            alert("Nenhum resultado recebido do servidor. Tente novamente.");
+          }
+        }, 10000);
         return;
       }
-
+      
       // Modo Single Player
       const winningNumber = Math.floor(Math.random() * 37);
       const finalBallAngle = -Math.PI/2 + winningNumber * segmentAngle;
@@ -548,8 +554,8 @@
       socket = io();
       socket.emit("setNickname", nickname);
       socket.on("resultado", (data) => {
+        clearTimeout(fallbackTimeout);
         const num = data.numeroSorteado;
-        // Se o servidor enviar o tempo para o próximo round, o countdown é atualizado; caso contrário, reinicia para 20
         countdown = data.nextRoundIn !== undefined ? data.nextRoundIn : 20;
         const finalBallAngle = -Math.PI/2 + num * segmentAngle;
         animateSpin(finalBallAngle, 2000, () => {
