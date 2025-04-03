@@ -37,6 +37,13 @@
       color: #555;
       margin: 20px 0;
     }
+    #lobby input[type="text"] {
+      padding: 8px;
+      width: 80%;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
     #lobby button {
       padding: 12px 20px;
       border: none;
@@ -81,12 +88,29 @@
     #game button:hover {
       background-color: #1565c0;
     }
-    /* Informações do modo e saldo */
+    /* Informações de Modo e Saldo */
     #infoModo {
       font-weight: bold;
       color: #555;
     }
-    /* Container da mesa e da roleta */
+    /* Tabela de Jogadores Online */
+    #playersList {
+      margin-top: 10px;
+      max-width: 400px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: auto;
+    }
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+    th, td {
+      padding: 8px;
+      text-align: center;
+    }
+    /* Container da Mesa e da Roleta */
     #tableAndRoulette {
       display: flex;
       flex-wrap: wrap;
@@ -123,7 +147,6 @@
     .cell.vermelho { background: #c62828; }
     .cell.preto { background: #000; }
     .cell.verde { background: #0b8043; }
-    /* Células para apostas externas */
     .outsideBets {
       margin-top: 10px;
       display: grid;
@@ -167,6 +190,8 @@
   <!-- Lobby -->
   <div id="lobby">
     <h1>Cassino</h1>
+    <p>Insira seu nickname para jogar Multiplayer:</p>
+    <input type="text" id="nicknameInput" placeholder="Digite seu nickname" />
     <p>Escolha o modo de jogo:</p>
     <button id="btnSingle">Single Player</button>
     <button id="btnMulti">Multiplayer</button>
@@ -177,6 +202,8 @@
     <h1>Roleta do Cassino</h1>
     <p id="infoModo"></p>
     <p>Saldo: <span id="saldo">100</span> fichas</p>
+    <p>Jogadores Online:</p>
+    <div id="playersList"></div>
     <div id="tableAndRoulette">
       <!-- Mesa de Apostas -->
       <div id="betTable">
@@ -238,6 +265,7 @@
           <div class="cell" data-bet="19-36">19-36</div>
         </div>
       </div>
+
       <!-- Área da Roleta -->
       <div id="rouletteContainer">
         <canvas id="roletaCanvas" width="300" height="300"></canvas>
@@ -245,7 +273,7 @@
         <p id="resultado"></p>
       </div>
     </div>
-    <!-- Botões adicionais -->
+    <!-- Botões Adicionais -->
     <div style="margin-top:20px;">
       <button onclick="mostrarEstatisticas()">Mostrar Estatísticas</button>
       <button onclick="voltarLobby()">Voltar ao Lobby</button>
@@ -263,8 +291,11 @@
     let totalJogadas = 0;
     let totalApostado = 0;
     let totalGanho = 0;
-    let betCounts = { numero: 0, cor: 0, paridade: 0, multipla: 0, "1ªDúzia": 0, "2ªDúzia": 0, "3ªDúzia": 0, "1-18": 0, "19-36": 0 };
-    let bets = [];        // Apostas locais: { bet: "valor", amount: 1 }
+    let betCounts = { 
+      numero: 0, cor: 0, paridade: 0, multipla: 0, 
+      "1ªDúzia": 0, "2ªDúzia": 0, "3ªDúzia": 0, "1-18": 0, "19-36": 0 
+    };
+    let bets = [];        // Array de apostas locais: { bet: "valor", amount: 1 }
     let isSpinning = false;
     let socket = null;
 
@@ -287,7 +318,6 @@
     let currentAngle = 0;
     const ballTrackRadius = wheelRadius + 20;
 
-    // Desenha a roleta com a bolinha (que acompanha o giro)
     function drawWheel(angle) {
       for (let i = 0; i < totalSegments; i++) {
         const startAngle = angle + i * segmentAngle;
@@ -301,7 +331,6 @@
         ctx.fill();
         ctx.strokeStyle = "#fff";
         ctx.stroke();
-
         ctx.save();
         ctx.translate(centerX, centerY);
         ctx.rotate(startAngle + segmentAngle / 2);
@@ -466,14 +495,19 @@
      * MODO MULTIPLAYER (Socket.io)
      ***********************************************/
     document.getElementById("btnMulti").addEventListener("click", () => {
+      let nickname = document.getElementById("nicknameInput").value;
+      if (!nickname) {
+        alert("Por favor, insira seu nickname para Multiplayer.");
+        return;
+      }
       modo = "multi";
       lobbyDiv.style.display = "none";
       gameDiv.style.display = "block";
       infoModo.textContent = "Modo: Multiplayer";
       socket = io();
+      socket.emit("setNickname", nickname);
       socket.on("resultado", (data) => {
         const num = data.numeroSorteado;
-        // Animação da roleta no modo Multiplayer
         const finalAngle = -(num * segmentAngle);
         const extraRotations = 3 * 2 * Math.PI;
         const targetAngle = finalAngle + extraRotations;
@@ -484,10 +518,17 @@
           isSpinning = false;
         });
       });
+      socket.on("playersList", (players) => {
+        let html = "<table cellspacing='0' cellpadding='5'><tr><th>Nickname</th><th>Fichas</th></tr>";
+        players.forEach(player => {
+          html += `<tr><td>${player.nickname}</td><td>${player.saldo}</td></tr>`;
+        });
+        html += "</table>";
+        document.getElementById("playersList").innerHTML = html;
+      });
       socket.on("connect", () => {
         saldoEl.textContent = "100";
       });
-      // Opcional: configurar outros eventos se necessário
     });
 
     /************************************************
