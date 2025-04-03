@@ -411,7 +411,6 @@
       timerEl.textContent = "Próximo giro em: " + countdown + " segundos";
       if (modo === "multi" && countdown <= 0 && !isSpinning) {
         document.getElementById("btnGirar").click();
-        // Em Multiplayer, o servidor envia o próximo timer; mas se não, reinicia para 20
         countdown = 20;
       } else if (countdown > 0) {
         countdown--;
@@ -459,6 +458,7 @@
      ***********************************************/
     document.getElementById("btnGirar").addEventListener("click", () => {
       if (isSpinning) return;
+      // Em Multiplayer, se o timer ainda não chegou a 0, bloqueia
       if (modo === "multi" && countdown > 0) {
         alert("Aguarde o timer chegar a 0 para girar a roleta.");
         return;
@@ -472,6 +472,13 @@
         socket.emit("girar");
         bets = [];
         document.querySelectorAll(".chip").forEach(chip => chip.remove());
+        // Fallback: se nenhum resultado chegar em 10 segundos, libera isSpinning
+        setTimeout(() => {
+          if (isSpinning) {
+            isSpinning = false;
+            alert("Nenhum resultado recebido do servidor. Tente novamente.");
+          }
+        }, 10000);
         return;
       }
 
@@ -549,7 +556,6 @@
       socket.emit("setNickname", nickname);
       socket.on("resultado", (data) => {
         const num = data.numeroSorteado;
-        // Sincroniza o timer com o valor enviado pelo servidor (se houver)
         if (data.nextRoundIn !== undefined) {
           countdown = data.nextRoundIn;
         } else {
