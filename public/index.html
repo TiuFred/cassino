@@ -53,7 +53,7 @@
     }
     /* Tela do Jogo */
     #game {
-      display: none; /* Oculto até que o jogador escolha um modo */
+      display: none;
       background: #fff;
       padding: 20px 30px;
       border-radius: 12px;
@@ -67,7 +67,6 @@
       margin-top: 0;
       color: #333;
     }
-    /* Botões da Tela do Jogo */
     #game button {
       padding: 10px 16px;
       border: none;
@@ -82,7 +81,7 @@
     #game button:hover {
       background-color: #1565c0;
     }
-    /* Área para exibir informações do modo */
+    /* Informações do modo e saldo */
     #infoModo {
       font-weight: bold;
       color: #555;
@@ -102,12 +101,10 @@
       box-shadow: 0 0 10px rgba(0,0,0,0.5);
       color: #fff;
     }
-    /* Grade Principal (exemplo simplificado) */
     .grid {
       display: grid;
       gap: 2px;
     }
-    /* Exemplo: grade para 13 colunas (uma para o zero e 12 para os demais) */
     .mainRow {
       grid-template-columns: 40px repeat(12, 40px);
     }
@@ -123,11 +120,10 @@
       position: relative;
       font-size: 14px;
     }
-    /* Cores em Português */
     .cell.vermelho { background: #c62828; }
     .cell.preto { background: #000; }
-    .cell.verde { background: #0b8043; } /* para o zero */
-    /* Para células externas (apostas como "1ª Dúzia", etc.) */
+    .cell.verde { background: #0b8043; }
+    /* Células para apostas externas */
     .outsideBets {
       margin-top: 10px;
       display: grid;
@@ -135,7 +131,7 @@
       gap: 4px;
       justify-content: center;
     }
-    /* Ficha (chip) */
+    /* Fichas (chips) */
     .chip {
       position: absolute;
       bottom: 0;
@@ -184,11 +180,10 @@
     <div id="tableAndRoulette">
       <!-- Mesa de Apostas -->
       <div id="betTable">
-        <!-- Grade principal: Uma coluna para o zero e três linhas para os demais números (exemplo simplificado) -->
         <div class="grid mainRow" id="mainGrid">
           <!-- Zero -->
           <div class="cell verde" data-bet="0">0</div>
-          <!-- Linha 1 (exemplo: 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36) -->
+          <!-- Linha 1 -->
           <div class="cell vermelho" data-bet="3">3</div>
           <div class="cell preto" data-bet="6">6</div>
           <div class="cell vermelho" data-bet="9">9</div>
@@ -202,7 +197,7 @@
           <div class="cell vermelho" data-bet="33">33</div>
           <div class="cell preto" data-bet="36">36</div>
 
-          <!-- Linha 2 (exemplo: 2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35) -->
+          <!-- Linha 2 -->
           <div class="cell preto" data-bet="2">2</div>
           <div class="cell vermelho" data-bet="5">5</div>
           <div class="cell preto" data-bet="8">8</div>
@@ -216,7 +211,7 @@
           <div class="cell preto" data-bet="32">32</div>
           <div class="cell vermelho" data-bet="35">35</div>
 
-          <!-- Linha 3 (exemplo: 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34) -->
+          <!-- Linha 3 -->
           <div class="cell vermelho" data-bet="1">1</div>
           <div class="cell preto" data-bet="4">4</div>
           <div class="cell vermelho" data-bet="7">7</div>
@@ -230,7 +225,6 @@
           <div class="cell vermelho" data-bet="31">31</div>
           <div class="cell preto" data-bet="34">34</div>
         </div>
-
         <!-- Apostas Externas -->
         <div class="outsideBets" id="outsideBets">
           <div class="cell" data-bet="1ªDúzia">1ª Dúzia</div>
@@ -244,7 +238,6 @@
           <div class="cell" data-bet="19-36">19-36</div>
         </div>
       </div>
-
       <!-- Área da Roleta -->
       <div id="rouletteContainer">
         <canvas id="roletaCanvas" width="300" height="300"></canvas>
@@ -252,7 +245,6 @@
         <p id="resultado"></p>
       </div>
     </div>
-
     <!-- Botões adicionais -->
     <div style="margin-top:20px;">
       <button onclick="mostrarEstatisticas()">Mostrar Estatísticas</button>
@@ -263,7 +255,7 @@
   <!-- Socket.io (para Multiplayer) -->
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    /***********************************************
+    /************************************************
      * VARIÁVEIS GLOBAIS E ESTADO
      ***********************************************/
     let modo = "single";  // "single" ou "multi"
@@ -272,7 +264,7 @@
     let totalApostado = 0;
     let totalGanho = 0;
     let betCounts = { numero: 0, cor: 0, paridade: 0, multipla: 0, "1ªDúzia": 0, "2ªDúzia": 0, "3ªDúzia": 0, "1-18": 0, "19-36": 0 };
-    let bets = [];  // Array de apostas locais: { bet: "valor", amount: 1 }
+    let bets = [];        // Apostas locais: { bet: "valor", amount: 1 }
     let isSpinning = false;
     let socket = null;
 
@@ -282,7 +274,7 @@
     const saldoEl = document.getElementById("saldo");
     const resultadoEl = document.getElementById("resultado");
 
-    /***********************************************
+    /************************************************
      * CONFIGURAÇÃO DO CANVAS – ROLETA E BOLINHA
      ***********************************************/
     const canvas = document.getElementById("roletaCanvas");
@@ -293,26 +285,23 @@
     const totalSegments = 37;
     const segmentAngle = (2 * Math.PI) / totalSegments;
     let currentAngle = 0;
-    const ballTrackRadius = wheelRadius + 20; // Raio onde a bolinha se move
+    const ballTrackRadius = wheelRadius + 20;
 
-    // Função para desenhar a roleta
+    // Desenha a roleta com a bolinha (que acompanha o giro)
     function drawWheel(angle) {
       for (let i = 0; i < totalSegments; i++) {
         const startAngle = angle + i * segmentAngle;
         const endAngle = startAngle + segmentAngle;
-        // Define cores: zero é verde; para os demais, usamos "vermelho" e "preto"
         const cor = (i === 0) ? "green" : (i % 2 === 0 ? "preto" : "vermelho");
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
         ctx.arc(centerX, centerY, wheelRadius, startAngle, endAngle);
         ctx.closePath();
-        // Traduzindo para as cores definidas:
         ctx.fillStyle = (i === 0) ? "#0b8043" : (i % 2 === 0 ? "#000" : "#c62828");
         ctx.fill();
         ctx.strokeStyle = "#fff";
         ctx.stroke();
 
-        // Desenha o número
         ctx.save();
         ctx.translate(centerX, centerY);
         ctx.rotate(startAngle + segmentAngle / 2);
@@ -324,9 +313,7 @@
       }
     }
 
-    // Função para desenhar a bolinha (ficha) sobre a roleta
     function drawBall(angle) {
-      // Calcula a posição da bolinha na circunferência de ballTrackRadius
       const ballX = centerX + ballTrackRadius * Math.cos(angle);
       const ballY = centerY + ballTrackRadius * Math.sin(angle);
       ctx.beginPath();
@@ -337,24 +324,21 @@
       ctx.stroke();
     }
 
-    // Função para desenhar tudo: roleta + bolinha
     function drawAll(angle) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawWheel(angle);
-      // Desenha a bolinha fixada em um ângulo (podemos escolher o ângulo inicial = 0)
       drawBall(angle);
     }
-
     drawAll(currentAngle);
 
-    /***********************************************
+    /************************************************
      * FUNÇÃO DE EASING
      ***********************************************/
     function easeOutCubic(t) {
       return 1 - Math.pow(1 - t, 3);
     }
 
-    /***********************************************
+    /************************************************
      * ANIMAÇÃO DO GIRO DA ROLETA (COM BOLINHA)
      ***********************************************/
     function animateSpin(finalAngle, duration, callback) {
@@ -381,26 +365,21 @@
       requestAnimationFrame(animate);
     }
 
-    /***********************************************
+    /************************************************
      * LÓGICA DA MESA DE APOSTAS
      ***********************************************/
     function onCellClick(e) {
       if (isSpinning) return;
       const cell = e.currentTarget;
       const betValue = cell.getAttribute("data-bet");
-      const betAmount = 1; // Cada clique = 1 ficha
-
-      // Adiciona a aposta ao array local e atualiza estatísticas locais
+      const betAmount = 1;
       let existing = bets.find(b => b.bet === betValue);
       if (existing) {
         existing.amount += betAmount;
       } else {
         bets.push({ bet: betValue, amount: betAmount });
       }
-      // Atualiza contagem de apostas para estatísticas
       betCounts[betValue] = (betCounts[betValue] || 0) + betAmount;
-
-      // Exibe visualmente uma ficha na célula
       const chip = document.createElement("div");
       chip.classList.add("chip");
       chip.textContent = betAmount;
@@ -410,25 +389,23 @@
       cell.addEventListener("click", onCellClick);
     });
 
-    /***********************************************
-     * GIRO DA ROLETA
+    /************************************************
+     * BOTÃO DE GIRO DA ROLETA
      ***********************************************/
     document.getElementById("btnGirar").addEventListener("click", () => {
       if (isSpinning) return;
       isSpinning = true;
       resultadoEl.textContent = "";
       
-      // Se for Multiplayer, envia as apostas e o comando para girar para o servidor
       if (modo === "multi" && socket) {
         bets.forEach(b => socket.emit("apostar", b));
         socket.emit("girar");
-        // Limpa apostas locais
         bets = [];
         document.querySelectorAll(".chip").forEach(chip => chip.remove());
         return;
       }
       
-      // Para Single Player: sorteia localmente
+      // Modo Single Player
       const winningNumber = Math.floor(Math.random() * 37);
       const finalAngle = -(winningNumber * segmentAngle);
       const extraRotations = 3 * 2 * Math.PI;
@@ -444,15 +421,11 @@
       let totalBet = bets.reduce((acc, b) => acc + b.amount, 0);
       let totalGanhos = 0;
       bets.forEach(b => {
-        // Se a aposta for numérica (exemplo: aposta exata no número)
         if (!isNaN(parseInt(b.bet))) {
           if (parseInt(b.bet) === num) {
             totalGanhos += b.amount * 35;
           }
-        }
-        // Para apostas externas: checa se a aposta bate com o resultado
-        else if (b.bet === "vermelho" && num !== 0 && (num % 2 === 1)) {
-          // No exemplo anterior, usamos "vermelho" para números ímpares, mas ajuste conforme sua regra
+        } else if (b.bet === "vermelho" && num !== 0 && (num % 2 === 1)) {
           totalGanhos += b.amount;
         } else if (b.bet === "preto" && num !== 0 && (num % 2 === 0)) {
           totalGanhos += b.amount;
@@ -460,9 +433,7 @@
           totalGanhos += b.amount;
         } else if (b.bet === "ímpar" && num !== 0 && num % 2 === 1) {
           totalGanhos += b.amount;
-        }
-        // Apostas externas como "1ª Dúzia", "2ª Dúzia", "3ª Dúzia", "1-18", "19-36"
-        else if (b.bet === "1ªDúzia" && num >= 1 && num <= 12) {
+        } else if (b.bet === "1ªDúzia" && num >= 1 && num <= 12) {
           totalGanhos += b.amount * 2;
         } else if (b.bet === "2ªDúzia" && num >= 13 && num <= 24) {
           totalGanhos += b.amount * 2;
@@ -491,11 +462,63 @@
       document.querySelectorAll(".chip").forEach(chip => chip.remove());
     }
 
-    /***********************************************
+    /************************************************
+     * MODO MULTIPLAYER (Socket.io)
+     ***********************************************/
+    document.getElementById("btnMulti").addEventListener("click", () => {
+      modo = "multi";
+      lobbyDiv.style.display = "none";
+      gameDiv.style.display = "block";
+      infoModo.textContent = "Modo: Multiplayer";
+      socket = io();
+      socket.on("resultado", (data) => {
+        const num = data.numeroSorteado;
+        // Animação da roleta no modo Multiplayer
+        const finalAngle = -(num * segmentAngle);
+        const extraRotations = 3 * 2 * Math.PI;
+        const targetAngle = finalAngle + extraRotations;
+        animateSpin(targetAngle, 2000, () => {
+          resultadoEl.textContent = `Número sorteado: ${num} (Multiplayer)`;
+          const meuSaldo = data.saldos[socket.id];
+          saldoEl.textContent = meuSaldo;
+          isSpinning = false;
+        });
+      });
+      socket.on("connect", () => {
+        saldoEl.textContent = "100";
+      });
+      // Opcional: configurar outros eventos se necessário
+    });
+
+    /************************************************
+     * MODO SINGLE PLAYER
+     ***********************************************/
+    document.getElementById("btnSingle").addEventListener("click", () => {
+      modo = "single";
+      lobbyDiv.style.display = "none";
+      gameDiv.style.display = "block";
+      infoModo.textContent = "Modo: Single Player";
+      saldoEl.textContent = saldo;
+    });
+
+    /************************************************
+     * BOTÃO PARA VOLTAR AO LOBBY
+     ***********************************************/
+    function voltarLobby() {
+      if (modo === "multi" && socket) {
+        socket.disconnect();
+        socket = null;
+      }
+      bets = [];
+      isSpinning = false;
+      lobbyDiv.style.display = "flex";
+      gameDiv.style.display = "none";
+    }
+
+    /************************************************
      * ESTATÍSTICAS
      ***********************************************/
     function mostrarEstatisticas() {
-      // Calcula a aposta mais comum
       let apostaMaisComum = "";
       let maxCount = 0;
       for (const key in betCounts) {
@@ -513,52 +536,6 @@
         "Aposta Mais Comum: " + (apostaMaisComum || "Nenhuma");
       alert(statsMsg);
     }
-
-    /***********************************************
-     * BOTÃO PARA VOLTAR AO LOBBY
-     ***********************************************/
-    function voltarLobby() {
-      // Para o modo Multiplayer, você pode fechar a conexão se desejar
-      if (modo === "multi" && socket) {
-        socket.disconnect();
-        socket = null;
-      }
-      // Reseta variáveis locais se necessário
-      bets = [];
-      isSpinning = false;
-      lobbyDiv.style.display = "flex";
-      gameDiv.style.display = "none";
-    }
-
-    /***********************************************
-     * LÓGICA DO LOBBY – ESCOLHA DO MODO
-     ***********************************************/
-    document.getElementById("btnSingle").addEventListener("click", () => {
-      modo = "single";
-      lobbyDiv.style.display = "none";
-      gameDiv.style.display = "block";
-      infoModo.textContent = "Modo: Single Player";
-      saldoEl.textContent = saldo;
-    });
-
-    document.getElementById("btnMulti").addEventListener("click", () => {
-      modo = "multi";
-      lobbyDiv.style.display = "none";
-      gameDiv.style.display = "block";
-      infoModo.textContent = "Modo: Multiplayer";
-      // Conecta ao servidor para Multiplayer
-      socket = io();
-      socket.on("resultado", (data) => {
-        const num = data.numeroSorteado;
-        resultadoEl.textContent = "Número sorteado: " + num + " (Multiplayer)";
-        const meuSaldo = data.saldos[socket.id];
-        saldoEl.textContent = meuSaldo;
-        isSpinning = false;
-      });
-      socket.on("connect", () => {
-        saldoEl.textContent = "100";
-      });
-    });
   </script>
 </body>
 </html>
