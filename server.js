@@ -10,27 +10,23 @@ const io = socketio(server);
 // Serve os arquivos estáticos da pasta "public"
 app.use(express.static("public"));
 
-// Estado simples do jogo: saldos, apostas e nicknames de cada jogador
-let saldos = {};       // Exemplo: { socketId: 100 }
-let apostas = {};      // Exemplo: { socketId: [ { bet: '3', amount: 5 }, ... ] }
-let nicknames = {};    // Exemplo: { socketId: "nomeDoJogador" }
+// Estado do jogo: saldos, apostas e nicknames
+let saldos = {};    // Ex: { socketId: 100 }
+let apostas = {};   // Ex: { socketId: [ { bet: 'valor', amount: X }, ... ] }
+let nicknames = {}; // Ex: { socketId: "nickname" }
 
 io.on("connection", (socket) => {
   console.log("Novo jogador conectado:", socket.id);
-  
-  // Inicializa o saldo do jogador com 100 fichas
   saldos[socket.id] = 100;
 
-  // Evento para definir o nickname do jogador
+  // Define o nickname do jogador
   socket.on("setNickname", (nickname) => {
     nicknames[socket.id] = nickname;
-    // Emite a lista de jogadores atualizada para todos
     io.emit("playersList", getPlayersList());
     console.log(`Jogador ${socket.id} definiu nickname: ${nickname}`);
   });
 
-  // Evento para receber uma aposta do cliente
-  // Formato esperado: { bet: 'valor', amount: número }
+  // Recebe as apostas do jogador
   socket.on("apostar", (dados) => {
     if (!apostas[socket.id]) {
       apostas[socket.id] = [];
@@ -39,40 +35,58 @@ io.on("connection", (socket) => {
     console.log(`Jogador ${socket.id} apostou`, dados);
   });
 
-  // Evento para girar a roleta (pode ser iniciado por qualquer jogador)
+  // Evento para girar a roleta
   socket.on("girar", () => {
-    // Sorteia um número entre 0 e 36
+    // Sorteia um número de 0 a 36
     const numeroSorteado = Math.floor(Math.random() * 37);
     console.log(`Número sorteado: ${numeroSorteado}`);
 
-    // Para cada jogador, calcula os ganhos baseados nas apostas realizadas
+    let winners = [];
+    // Processa as apostas de cada jogador
     for (const id in apostas) {
       let ganhoTotal = 0;
       let totalApostado = apostas[id].reduce((acc, aposta) => acc + aposta.amount, 0);
+
+      // Verifica cada aposta do jogador
       apostas[id].forEach((aposta) => {
-        // Exemplo: se a aposta for exatamente igual ao número sorteado, o jogador ganha 35:1
+        // Exemplo simples: se a aposta for exatamente igual ao número sorteado, ganha 35:1
         if (parseInt(aposta.bet) === numeroSorteado) {
           ganhoTotal += aposta.amount * 35;
         }
-        // Aqui você pode expandir a lógica para outras modalidades (cor, par/ímpar, dúzias, etc.)
+        // Aqui você pode expandir a lógica para outras apostas (cor, par/ímpar, dúzias, etc.)
       });
-      // Atualiza o saldo do jogador: subtrai o total apostado e soma o ganho
+      // Atualiza o saldo do jogador
       saldos[id] -= totalApostado;
       saldos[id] += ganhoTotal;
+      if (ganhoTotal > 0) {
+        winners.push(nicknames[id] || id);
+      }
     }
-    
-    // Emite o resultado para todos os clientes conectados
+
+    // Se ninguém ganhou, define "Ninguém"
+    if (winners.length === 0) {
+      winners.push("Ninguém");
+    }
+
+    // Emite o resultado para todos os jogadores, incluindo:
+    // - numeroSorteado
+    // - saldos atualizados
+    // - winners: array com os nicknames dos vencedores
+    // - nextRoundIn: tempo para o próximo giro (20 segundos)
     io.emit("resultado", {
       numeroSorteado,
       saldos,
-      apostas
+      winners,
+      nextRoundIn: 20
     });
-    
-    // Limpa as apostas após o giro
+
+    // Emite a lista atualizada de jogadores
+    io.emit("playersList", getPlayersList());
+
+    // Reinicia as apostas para a próxima rodada
     apostas = {};
   });
 
-  // Quando o jogador se desconecta, remove seu estado e atualiza a lista de jogadores
   socket.on("disconnect", () => {
     console.log("Jogador desconectado:", socket.id);
     delete saldos[socket.id];
@@ -82,7 +96,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// Função para montar a lista de jogadores com seus nicknames e saldos
+// Função para montar a lista de jogadores
 function getPlayersList() {
   let players = [];
   for (let id in nicknames) {
@@ -91,6 +105,6 @@ function getPlayersList() {
   return players;
 }
 
-server.listen(3000, () => {
+server.listen(process.env.PORT || 3000, () => {
   console.log("Servidor rodando na porta 3000");
 });
