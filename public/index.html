@@ -458,27 +458,20 @@
      ***********************************************/
     document.getElementById("btnGirar").addEventListener("click", () => {
       if (isSpinning) return;
-      // Em Multiplayer, se o timer ainda não chegou a 0, bloqueia
+      // Em Multiplayer, bloqueia giro manual se o timer não chegou a 0
       if (modo === "multi" && countdown > 0) {
         alert("Aguarde o timer chegar a 0 para girar a roleta.");
         return;
       }
       isSpinning = true;
       resultadoEl.innerHTML = "";
-      countdown = 20; // reinicia o timer
+      countdown = 20;
 
       if (modo === "multi" && socket) {
         bets.forEach(b => socket.emit("apostar", b));
         socket.emit("girar");
         bets = [];
         document.querySelectorAll(".chip").forEach(chip => chip.remove());
-        // Fallback: se nenhum resultado chegar em 10 segundos, libera isSpinning
-        setTimeout(() => {
-          if (isSpinning) {
-            isSpinning = false;
-            alert("Nenhum resultado recebido do servidor. Tente novamente.");
-          }
-        }, 10000);
         return;
       }
 
@@ -556,11 +549,8 @@
       socket.emit("setNickname", nickname);
       socket.on("resultado", (data) => {
         const num = data.numeroSorteado;
-        if (data.nextRoundIn !== undefined) {
-          countdown = data.nextRoundIn;
-        } else {
-          countdown = 20;
-        }
+        // Se o servidor enviar o tempo para o próximo round, o countdown é atualizado; caso contrário, reinicia para 20
+        countdown = data.nextRoundIn !== undefined ? data.nextRoundIn : 20;
         const finalBallAngle = -Math.PI/2 + num * segmentAngle;
         animateSpin(finalBallAngle, 2000, () => {
           resultadoEl.innerHTML = `Número sorteado: ${num} (Multiplayer)<br>Vencedores: ${data.winners.join(", ")}`;
