@@ -94,7 +94,7 @@
       font-weight: bold;
       color: #555;
     }
-    /* Tabela de Jogadores */
+    /* Tabela de Jogadores Online */
     #playersList {
       margin-top: 10px;
       max-width: 400px;
@@ -154,7 +154,6 @@
     .cell.vermelho { background: #c62828; }
     .cell.preto { background: #000; }
     .cell.verde { background: #0b8043; }
-    /* Ajuste para as células externas, garantindo que os textos fiquem completos */
     .outsideBets .cell {
       width: auto;
       min-width: 80px;
@@ -412,6 +411,7 @@
       timerEl.textContent = "Próximo giro em: " + countdown + " segundos";
       if (modo === "multi" && countdown <= 0 && !isSpinning) {
         document.getElementById("btnGirar").click();
+        // Em Multiplayer, o servidor envia o próximo timer; mas se não, reinicia para 20
         countdown = 20;
       } else if (countdown > 0) {
         countdown--;
@@ -459,14 +459,13 @@
      ***********************************************/
     document.getElementById("btnGirar").addEventListener("click", () => {
       if (isSpinning) return;
-      // Para Multiplayer, bloqueia giro manual se o timer não zerou
       if (modo === "multi" && countdown > 0) {
         alert("Aguarde o timer chegar a 0 para girar a roleta.");
         return;
       }
       isSpinning = true;
       resultadoEl.innerHTML = "";
-      countdown = 20;
+      countdown = 20; // reinicia o timer
 
       if (modo === "multi" && socket) {
         bets.forEach(b => socket.emit("apostar", b));
@@ -550,6 +549,12 @@
       socket.emit("setNickname", nickname);
       socket.on("resultado", (data) => {
         const num = data.numeroSorteado;
+        // Sincroniza o timer com o valor enviado pelo servidor (se houver)
+        if (data.nextRoundIn !== undefined) {
+          countdown = data.nextRoundIn;
+        } else {
+          countdown = 20;
+        }
         const finalBallAngle = -Math.PI/2 + num * segmentAngle;
         animateSpin(finalBallAngle, 2000, () => {
           resultadoEl.innerHTML = `Número sorteado: ${num} (Multiplayer)<br>Vencedores: ${data.winners.join(", ")}`;
