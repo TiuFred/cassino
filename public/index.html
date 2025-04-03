@@ -98,7 +98,6 @@
     #playersList {
       margin-top: 10px;
       max-width: 400px;
-      text-align: left;
     }
     table {
       width: 100%;
@@ -162,27 +161,7 @@
       gap: 4px;
       justify-content: center;
     }
-    /* Moedas para apostar (drag and drop) */
-    .coin {
-      width: 50px;
-      height: 50px;
-      border-radius: 50%;
-      background: radial-gradient(circle, #ffcc00, #cc9900);
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      cursor: move;
-      margin: 5px;
-      user-select: none;
-    }
-    #coinContainer {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      margin-top: 10px;
-    }
+    /* Moedas removidas; aposta via prompt agora */
     /* Fichas (chips) */
     .chip {
       position: absolute;
@@ -277,6 +256,7 @@
           <div class="cell vermelho" data-bet="31">31</div>
           <div class="cell preto" data-bet="34">34</div>
         </div>
+        <!-- Apostas Externas -->
         <div class="outsideBets" id="outsideBets">
           <div class="cell" data-bet="1ªDúzia">1ª Dúzia</div>
           <div class="cell" data-bet="2ªDúzia">2ª Dúzia</div>
@@ -289,6 +269,7 @@
           <div class="cell" data-bet="19-36">19-36</div>
         </div>
       </div>
+
       <!-- Área da Roleta -->
       <div id="rouletteContainer">
         <canvas id="roletaCanvas" width="300" height="300"></canvas>
@@ -296,15 +277,7 @@
         <p id="resultado"></p>
       </div>
     </div>
-    <!-- Container de Moedas para Apostar (drag and drop) -->
-    <div id="coinContainer">
-      <div class="coin" draggable="true" data-value="1">1</div>
-      <div class="coin" draggable="true" data-value="5">5</div>
-      <div class="coin" draggable="true" data-value="10">10</div>
-      <div class="coin" draggable="true" data-value="20">20</div>
-      <div class="coin" draggable="true" data-value="50">50</div>
-    </div>
-    <!-- Botões adicionais -->
+    <!-- Botões Adicionais -->
     <div style="margin-top:20px;">
       <button onclick="mostrarEstatisticas()">Mostrar Estatísticas</button>
       <button onclick="voltarLobby()">Voltar ao Lobby</button>
@@ -318,7 +291,7 @@
      * VARIÁVEIS GLOBAIS E ESTADO
      ***********************************************/
     let modo = "single";  // "single" ou "multi"
-    let saldo = 100;      // Saldo local para Single Player (o servidor gerencia para Multiplayer)
+    let saldo = 100;      // Saldo local (para Single Player; para Multiplayer, o servidor gerencia)
     let totalJogadas = 0;
     let totalApostado = 0;
     let totalGanho = 0;
@@ -330,7 +303,7 @@
     let bets = [];        // Apostas locais: { bet: "valor", amount: número }
     let isSpinning = false;
     let socket = null;
-    let countdown = 20;   // Timer de 20 segundos para o giro
+    let countdown = 20;   // Timer em segundos para o giro automático (Multiplayer)
 
     const lobbyDiv = document.getElementById("lobby");
     const gameDiv = document.getElementById("game");
@@ -352,7 +325,7 @@
     const segmentAngle = (2 * Math.PI) / totalSegments;
     let currentAngle = 0;
     const ballTrackRadius = wheelRadius + 20;
-    let ballAngle = 0; // Ângulo para a bolinha
+    let ballAngle = 0; // Ângulo da bolinha
 
     function drawWheel(angle) {
       for (let i = 0; i < totalSegments; i++) {
@@ -379,6 +352,7 @@
     }
 
     function drawBall(angle) {
+      // Atualiza a bolinha com base no ballAngle (que gira continuamente)
       const ballX = centerX + ballTrackRadius * Math.cos(ballAngle);
       const ballY = centerY + ballTrackRadius * Math.sin(ballAngle);
       ctx.beginPath();
@@ -420,7 +394,7 @@
         const progress = Math.min(elapsed / duration, 1);
         const eased = easeOutCubic(progress);
         currentAngle = startAngle + totalRotation * eased;
-        // Atualiza a bolinha girando em velocidade constante
+        // Incrementa a bolinha de forma contínua
         ballAngle += 0.1;
         drawAll(currentAngle);
         if (progress < 1) {
@@ -433,25 +407,40 @@
     }
 
     /************************************************
-     * TIMER PARA O GIRO (20 segundos)
+     * TIMER AUTOMÁTICO PARA MULTIPLAYER
      ***********************************************/
     function updateTimer() {
       timerEl.textContent = "Próximo giro em: " + countdown + " segundos";
-      if (countdown > 0) {
+      if (modo === "multi" && countdown <= 0 && !isSpinning) {
+        // Quando o timer chegar a 0, automaticamente dispara o giro
+        document.getElementById("btnGirar").click();
+        countdown = 20; // Reinicia o timer
+      } else if (countdown > 0) {
         countdown--;
       }
     }
     setInterval(updateTimer, 1000);
 
     /************************************************
-     * LÓGICA DA MESA DE APOSTAS
+     * LÓGICA DA MESA DE APOSTAS – APOSTA VIA PROMPT
      ***********************************************/
     function onCellClick(e) {
       if (isSpinning) return;
       const cell = e.currentTarget;
       const betValue = cell.getAttribute("data-bet");
-      // Por padrão, se clicar, aposta 1 ficha
-      const betAmount = 1;
+      let disponivel = (modo === "single") ? saldo : parseInt(saldoEl.textContent);
+      let valorStr = prompt("Quanto você deseja apostar para " + betValue + "?\nSaldo disponível: " + disponivel + " fichas");
+      if (!valorStr) return;
+      let betAmount = parseInt(valorStr);
+      if (isNaN(betAmount) || betAmount <= 0) {
+        alert("Valor inválido.");
+        return;
+      }
+      if (betAmount > disponivel) {
+        alert("Você não tem fichas suficientes para essa aposta.");
+        return;
+      }
+      // Registra a aposta
       let existing = bets.find(b => b.bet === betValue);
       if (existing) {
         existing.amount += betAmount;
@@ -459,6 +448,7 @@
         bets.push({ bet: betValue, amount: betAmount });
       }
       betCounts[betValue] = (betCounts[betValue] || 0) + betAmount;
+      // Exibe uma ficha (chip) com o valor apostado na célula
       const chip = document.createElement("div");
       chip.classList.add("chip");
       chip.textContent = betAmount;
@@ -466,31 +456,7 @@
     }
     document.querySelectorAll("#betTable .cell").forEach(cell => {
       cell.addEventListener("click", onCellClick);
-      // Eventos de drag & drop para moedas
-      cell.addEventListener("dragover", (e) => { e.preventDefault(); });
-      cell.addEventListener("drop", (e) => {
-        e.preventDefault();
-        let coinValue = parseInt(e.dataTransfer.getData("text/plain"));
-        const betValue = cell.getAttribute("data-bet");
-        let existing = bets.find(b => b.bet === betValue);
-        if (existing) {
-          existing.amount += coinValue;
-        } else {
-          bets.push({ bet: betValue, amount: coinValue });
-        }
-        betCounts[betValue] = (betCounts[betValue] || 0) + coinValue;
-        const chip = document.createElement("div");
-        chip.classList.add("chip");
-        chip.textContent = coinValue;
-        cell.appendChild(chip);
-      });
-    });
-
-    // Torna as moedas arrastáveis
-    document.querySelectorAll(".coin").forEach(coin => {
-      coin.addEventListener("dragstart", (e) => {
-        e.dataTransfer.setData("text/plain", coin.getAttribute("data-value"));
-      });
+      // Removemos o código de drag and drop, pois usamos prompt
     });
 
     /************************************************
@@ -498,13 +464,14 @@
      ***********************************************/
     document.getElementById("btnGirar").addEventListener("click", () => {
       if (isSpinning) return;
-      if (countdown > 0) {
+      // Para Multiplayer, se o timer ainda não zerou, bloqueia manualmente
+      if (modo === "multi" && countdown > 0) {
         alert("Aguarde o timer chegar a 0 para girar a roleta.");
         return;
       }
       isSpinning = true;
       resultadoEl.textContent = "";
-      countdown = 20; // reinicia o timer
+      countdown = 20; // Reinicia o timer
 
       if (modo === "multi" && socket) {
         bets.forEach(b => socket.emit("apostar", b));
@@ -557,15 +524,13 @@
       saldo -= totalBet;
       saldo += totalGanhos;
       saldoEl.textContent = saldo;
-      if (modo === "single") {
-        let mensagem = `Número sorteado: ${num}. `;
-        if (totalGanhos > 0) {
-          mensagem += `Você ganhou ${totalGanhos} fichas!`;
-        } else {
-          mensagem += `Você não ganhou desta vez.`;
-        }
-        resultadoEl.textContent = mensagem;
+      let mensagem = `Número sorteado: ${num}.\n`;
+      if (totalGanhos > 0) {
+        mensagem += `Você ganhou ${totalGanhos} fichas!`;
+      } else {
+        mensagem += `Você não ganhou nesta rodada.`;
       }
+      resultadoEl.textContent = mensagem;
       if (saldo <= 0) {
         alert("Seu saldo acabou! Reiniciando com 100 fichas.");
         saldo = 100;
