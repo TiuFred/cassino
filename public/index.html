@@ -154,10 +154,17 @@
     .cell.vermelho { background: #c62828; }
     .cell.preto { background: #000; }
     .cell.verde { background: #0b8043; }
+    /* Ajuste para as células externas, garantindo que os textos fiquem completos */
+    .outsideBets .cell {
+      width: auto;
+      min-width: 80px;
+      padding: 8px;
+      text-align: center;
+    }
     .outsideBets {
       margin-top: 10px;
       display: grid;
-      grid-template-columns: repeat(6, 80px);
+      grid-template-columns: repeat(6, auto);
       gap: 4px;
       justify-content: center;
     }
@@ -288,7 +295,7 @@
      * VARIÁVEIS GLOBAIS E ESTADO
      ***********************************************/
     let modo = "single";  // "single" ou "multi"
-    let saldo = 100;      // Saldo local para Single Player (para Multiplayer, o servidor gerencia)
+    let saldo = 100;      // Saldo local para Single Player; para Multiplayer, o servidor gerencia
     let totalJogadas = 0;
     let totalApostado = 0;
     let totalGanho = 0;
@@ -297,7 +304,7 @@
       "1ªDúzia": 0, "2ªDúzia": 0, "3ªDúzia": 0, 
       "1-18": 0, "19-36": 0 
     };
-    let bets = [];        // Array de apostas locais: { bet: "valor", amount: número }
+    let bets = [];        // Apostas locais: { bet: "valor", amount: número }
     let isSpinning = false;
     let socket = null;
     let countdown = 20;   // Timer para o giro automático (Multiplayer)
@@ -320,11 +327,11 @@
     const wheelRadius = 130;
     const totalSegments = 37;
     const segmentAngle = (2 * Math.PI) / totalSegments;
-    let currentAngle = 0; // A roleta fica fixa (não gira)
+    let currentAngle = 0; // A roleta permanece fixa
     const ballTrackRadius = wheelRadius + 20;
     let ballAngle = 0; // Ângulo da bolinha
 
-    // Desenha a roleta (fixa)
+    // Desenha a roleta fixa e a bolinha girando
     function drawWheel(angle) {
       for (let i = 0; i < totalSegments; i++) {
         const startAngle = angle + i * segmentAngle;
@@ -349,10 +356,9 @@
       }
     }
 
-    // Desenha a bolinha (que gira)
     function drawBall(angle) {
-      const ballX = centerX + ballTrackRadius * Math.cos(angle);
-      const ballY = centerY + ballTrackRadius * Math.sin(angle);
+      const ballX = centerX + ballTrackRadius * Math.cos(ballAngle);
+      const ballY = centerY + ballTrackRadius * Math.sin(ballAngle);
       ctx.beginPath();
       ctx.arc(ballX, ballY, 8, 0, 2 * Math.PI);
       ctx.fillStyle = "yellow";
@@ -361,7 +367,6 @@
       ctx.stroke();
     }
 
-    // Desenha tudo (roleta fixa e bolinha em movimento)
     function drawAll() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawWheel(0); // roleta fixa
@@ -407,7 +412,7 @@
       timerEl.textContent = "Próximo giro em: " + countdown + " segundos";
       if (modo === "multi" && countdown <= 0 && !isSpinning) {
         document.getElementById("btnGirar").click();
-        countdown = 20; // reinicia o timer
+        countdown = 20;
       } else if (countdown > 0) {
         countdown--;
       }
@@ -421,7 +426,6 @@
       if (isSpinning) return;
       const cell = e.currentTarget;
       const betValue = cell.getAttribute("data-bet");
-      // Solicita o valor da aposta e mostra o saldo disponível
       let disponivel = (modo === "single") ? saldo : parseInt(saldoEl.textContent);
       let valorStr = prompt("Quanto deseja apostar em " + betValue + "?\nSaldo disponível: " + disponivel + " fichas");
       if (!valorStr) return;
@@ -455,14 +459,14 @@
      ***********************************************/
     document.getElementById("btnGirar").addEventListener("click", () => {
       if (isSpinning) return;
-      // No modo Multiplayer, impede giro manual se ainda houver tempo
+      // Para Multiplayer, bloqueia giro manual se o timer não zerou
       if (modo === "multi" && countdown > 0) {
         alert("Aguarde o timer chegar a 0 para girar a roleta.");
         return;
       }
       isSpinning = true;
-      resultadoEl.textContent = "";
-      countdown = 20; // reinicia o timer
+      resultadoEl.innerHTML = "";
+      countdown = 20;
 
       if (modo === "multi" && socket) {
         bets.forEach(b => socket.emit("apostar", b));
@@ -474,7 +478,6 @@
 
       // Modo Single Player
       const winningNumber = Math.floor(Math.random() * 37);
-      // Define o ângulo final da bolinha de forma que ela fique sobre o setor do número sorteado
       const finalBallAngle = -Math.PI/2 + winningNumber * segmentAngle;
       const duration = 2000;
       animateSpin(finalBallAngle, duration, () => {
@@ -514,13 +517,13 @@
       saldo -= totalBet;
       saldo += totalGanhos;
       saldoEl.textContent = saldo;
-      let mensagem = `Número sorteado: ${num}.\n`;
+      let mensagem = `Número sorteado: ${num}.<br>`;
       if (totalGanhos > 0) {
         mensagem += `Você ganhou ${totalGanhos} fichas!`;
       } else {
         mensagem += `Você não ganhou nesta rodada.`;
       }
-      resultadoEl.textContent = mensagem;
+      resultadoEl.innerHTML = mensagem;
       if (saldo <= 0) {
         alert("Seu saldo acabou! Reiniciando com 100 fichas.");
         saldo = 100;
@@ -547,10 +550,9 @@
       socket.emit("setNickname", nickname);
       socket.on("resultado", (data) => {
         const num = data.numeroSorteado;
-        // Animação da bolinha (a roleta permanece fixa)
         const finalBallAngle = -Math.PI/2 + num * segmentAngle;
         animateSpin(finalBallAngle, 2000, () => {
-          resultadoEl.textContent = `Número sorteado: ${num} (Multiplayer)\nVencedores: ${data.winners.join(", ")}`;
+          resultadoEl.innerHTML = `Número sorteado: ${num} (Multiplayer)<br>Vencedores: ${data.winners.join(", ")}`;
           const meuSaldo = data.saldos[socket.id];
           saldoEl.textContent = meuSaldo;
           isSpinning = false;
