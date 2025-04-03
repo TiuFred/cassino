@@ -54,6 +54,7 @@
       cursor: pointer;
       transition: background-color 0.3s;
       margin: 10px;
+      min-width: 150px;
     }
     #lobby button:hover {
       background-color: #005fa3;
@@ -84,11 +85,11 @@
       cursor: pointer;
       margin: 10px 5px;
       transition: background-color 0.3s;
+      min-width: 120px;
     }
     #game button:hover {
       background-color: #1565c0;
     }
-    /* Informações de Modo e Saldo */
     #infoModo {
       font-weight: bold;
       color: #555;
@@ -97,6 +98,7 @@
     #playersList {
       margin-top: 10px;
       max-width: 400px;
+      text-align: left;
     }
     table {
       width: 100%;
@@ -109,6 +111,12 @@
     th, td {
       padding: 8px;
       text-align: center;
+    }
+    /* Timer */
+    #timer {
+      font-size: 16px;
+      color: #333;
+      margin-top: 10px;
     }
     /* Container da Mesa e da Roleta */
     #tableAndRoulette {
@@ -153,6 +161,27 @@
       grid-template-columns: repeat(6, 80px);
       gap: 4px;
       justify-content: center;
+    }
+    /* Moedas para apostar (drag and drop) */
+    .coin {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #ffcc00, #cc9900);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      cursor: move;
+      margin: 5px;
+      user-select: none;
+    }
+    #coinContainer {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 10px;
     }
     /* Fichas (chips) */
     .chip {
@@ -202,15 +231,13 @@
     <h1>Roleta do Cassino</h1>
     <p id="infoModo"></p>
     <p>Saldo: <span id="saldo">100</span> fichas</p>
-    <p>Jogadores Online:</p>
+    <p id="timer">Próximo giro em: 20 segundos</p>
     <div id="playersList"></div>
     <div id="tableAndRoulette">
       <!-- Mesa de Apostas -->
       <div id="betTable">
         <div class="grid mainRow" id="mainGrid">
-          <!-- Zero -->
           <div class="cell verde" data-bet="0">0</div>
-          <!-- Linha 1 -->
           <div class="cell vermelho" data-bet="3">3</div>
           <div class="cell preto" data-bet="6">6</div>
           <div class="cell vermelho" data-bet="9">9</div>
@@ -224,7 +251,6 @@
           <div class="cell vermelho" data-bet="33">33</div>
           <div class="cell preto" data-bet="36">36</div>
 
-          <!-- Linha 2 -->
           <div class="cell preto" data-bet="2">2</div>
           <div class="cell vermelho" data-bet="5">5</div>
           <div class="cell preto" data-bet="8">8</div>
@@ -238,7 +264,6 @@
           <div class="cell preto" data-bet="32">32</div>
           <div class="cell vermelho" data-bet="35">35</div>
 
-          <!-- Linha 3 -->
           <div class="cell vermelho" data-bet="1">1</div>
           <div class="cell preto" data-bet="4">4</div>
           <div class="cell vermelho" data-bet="7">7</div>
@@ -252,7 +277,6 @@
           <div class="cell vermelho" data-bet="31">31</div>
           <div class="cell preto" data-bet="34">34</div>
         </div>
-        <!-- Apostas Externas -->
         <div class="outsideBets" id="outsideBets">
           <div class="cell" data-bet="1ªDúzia">1ª Dúzia</div>
           <div class="cell" data-bet="2ªDúzia">2ª Dúzia</div>
@@ -265,7 +289,6 @@
           <div class="cell" data-bet="19-36">19-36</div>
         </div>
       </div>
-
       <!-- Área da Roleta -->
       <div id="rouletteContainer">
         <canvas id="roletaCanvas" width="300" height="300"></canvas>
@@ -273,7 +296,15 @@
         <p id="resultado"></p>
       </div>
     </div>
-    <!-- Botões Adicionais -->
+    <!-- Container de Moedas para Apostar (drag and drop) -->
+    <div id="coinContainer">
+      <div class="coin" draggable="true" data-value="1">1</div>
+      <div class="coin" draggable="true" data-value="5">5</div>
+      <div class="coin" draggable="true" data-value="10">10</div>
+      <div class="coin" draggable="true" data-value="20">20</div>
+      <div class="coin" draggable="true" data-value="50">50</div>
+    </div>
+    <!-- Botões adicionais -->
     <div style="margin-top:20px;">
       <button onclick="mostrarEstatisticas()">Mostrar Estatísticas</button>
       <button onclick="voltarLobby()">Voltar ao Lobby</button>
@@ -293,17 +324,21 @@
     let totalGanho = 0;
     let betCounts = { 
       numero: 0, cor: 0, paridade: 0, multipla: 0, 
-      "1ªDúzia": 0, "2ªDúzia": 0, "3ªDúzia": 0, "1-18": 0, "19-36": 0 
+      "1ªDúzia": 0, "2ªDúzia": 0, "3ªDúzia": 0, 
+      "1-18": 0, "19-36": 0 
     };
-    let bets = [];        // Array de apostas locais: { bet: "valor", amount: 1 }
+    let bets = [];        // Apostas locais: { bet: "valor", amount: número }
     let isSpinning = false;
     let socket = null;
+    let countdown = 20;   // Timer de 20 segundos para o giro
 
     const lobbyDiv = document.getElementById("lobby");
     const gameDiv = document.getElementById("game");
     const infoModo = document.getElementById("infoModo");
     const saldoEl = document.getElementById("saldo");
     const resultadoEl = document.getElementById("resultado");
+    const timerEl = document.getElementById("timer");
+    const playersListDiv = document.getElementById("playersList");
 
     /************************************************
      * CONFIGURAÇÃO DO CANVAS – ROLETA E BOLINHA
@@ -317,6 +352,7 @@
     const segmentAngle = (2 * Math.PI) / totalSegments;
     let currentAngle = 0;
     const ballTrackRadius = wheelRadius + 20;
+    let ballAngle = 0; // Ângulo para a bolinha
 
     function drawWheel(angle) {
       for (let i = 0; i < totalSegments; i++) {
@@ -343,8 +379,8 @@
     }
 
     function drawBall(angle) {
-      const ballX = centerX + ballTrackRadius * Math.cos(angle);
-      const ballY = centerY + ballTrackRadius * Math.sin(angle);
+      const ballX = centerX + ballTrackRadius * Math.cos(ballAngle);
+      const ballY = centerY + ballTrackRadius * Math.sin(ballAngle);
       ctx.beginPath();
       ctx.arc(ballX, ballY, 8, 0, 2 * Math.PI);
       ctx.fillStyle = "yellow";
@@ -356,7 +392,7 @@
     function drawAll(angle) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawWheel(angle);
-      drawBall(angle);
+      drawBall(ballAngle);
     }
     drawAll(currentAngle);
 
@@ -384,6 +420,8 @@
         const progress = Math.min(elapsed / duration, 1);
         const eased = easeOutCubic(progress);
         currentAngle = startAngle + totalRotation * eased;
+        // Atualiza a bolinha girando em velocidade constante
+        ballAngle += 0.1;
         drawAll(currentAngle);
         if (progress < 1) {
           requestAnimationFrame(animate);
@@ -395,12 +433,24 @@
     }
 
     /************************************************
+     * TIMER PARA O GIRO (20 segundos)
+     ***********************************************/
+    function updateTimer() {
+      timerEl.textContent = "Próximo giro em: " + countdown + " segundos";
+      if (countdown > 0) {
+        countdown--;
+      }
+    }
+    setInterval(updateTimer, 1000);
+
+    /************************************************
      * LÓGICA DA MESA DE APOSTAS
      ***********************************************/
     function onCellClick(e) {
       if (isSpinning) return;
       const cell = e.currentTarget;
       const betValue = cell.getAttribute("data-bet");
+      // Por padrão, se clicar, aposta 1 ficha
       const betAmount = 1;
       let existing = bets.find(b => b.bet === betValue);
       if (existing) {
@@ -416,6 +466,31 @@
     }
     document.querySelectorAll("#betTable .cell").forEach(cell => {
       cell.addEventListener("click", onCellClick);
+      // Eventos de drag & drop para moedas
+      cell.addEventListener("dragover", (e) => { e.preventDefault(); });
+      cell.addEventListener("drop", (e) => {
+        e.preventDefault();
+        let coinValue = parseInt(e.dataTransfer.getData("text/plain"));
+        const betValue = cell.getAttribute("data-bet");
+        let existing = bets.find(b => b.bet === betValue);
+        if (existing) {
+          existing.amount += coinValue;
+        } else {
+          bets.push({ bet: betValue, amount: coinValue });
+        }
+        betCounts[betValue] = (betCounts[betValue] || 0) + coinValue;
+        const chip = document.createElement("div");
+        chip.classList.add("chip");
+        chip.textContent = coinValue;
+        cell.appendChild(chip);
+      });
+    });
+
+    // Torna as moedas arrastáveis
+    document.querySelectorAll(".coin").forEach(coin => {
+      coin.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", coin.getAttribute("data-value"));
+      });
     });
 
     /************************************************
@@ -423,9 +498,14 @@
      ***********************************************/
     document.getElementById("btnGirar").addEventListener("click", () => {
       if (isSpinning) return;
+      if (countdown > 0) {
+        alert("Aguarde o timer chegar a 0 para girar a roleta.");
+        return;
+      }
       isSpinning = true;
       resultadoEl.textContent = "";
-      
+      countdown = 20; // reinicia o timer
+
       if (modo === "multi" && socket) {
         bets.forEach(b => socket.emit("apostar", b));
         socket.emit("girar");
@@ -433,7 +513,7 @@
         document.querySelectorAll(".chip").forEach(chip => chip.remove());
         return;
       }
-      
+
       // Modo Single Player
       const winningNumber = Math.floor(Math.random() * 37);
       const finalAngle = -(winningNumber * segmentAngle);
@@ -477,10 +557,14 @@
       saldo -= totalBet;
       saldo += totalGanhos;
       saldoEl.textContent = saldo;
-      if (totalGanhos > 0) {
-        resultadoEl.textContent = `Número sorteado: ${num}. Você ganhou ${totalGanhos} fichas!`;
-      } else {
-        resultadoEl.textContent = `Número sorteado: ${num}. Você não ganhou desta vez.`;
+      if (modo === "single") {
+        let mensagem = `Número sorteado: ${num}. `;
+        if (totalGanhos > 0) {
+          mensagem += `Você ganhou ${totalGanhos} fichas!`;
+        } else {
+          mensagem += `Você não ganhou desta vez.`;
+        }
+        resultadoEl.textContent = mensagem;
       }
       if (saldo <= 0) {
         alert("Seu saldo acabou! Reiniciando com 100 fichas.");
@@ -512,19 +596,19 @@
         const extraRotations = 3 * 2 * Math.PI;
         const targetAngle = finalAngle + extraRotations;
         animateSpin(targetAngle, 2000, () => {
-          resultadoEl.textContent = `Número sorteado: ${num} (Multiplayer)`;
+          resultadoEl.textContent = `Número sorteado: ${num} (Multiplayer)\nVencedores: ${data.winners.join(", ")}`;
           const meuSaldo = data.saldos[socket.id];
           saldoEl.textContent = meuSaldo;
           isSpinning = false;
         });
       });
       socket.on("playersList", (players) => {
-        let html = "<table cellspacing='0' cellpadding='5'><tr><th>Nickname</th><th>Fichas</th></tr>";
+        let html = "<table><tr><th>Nickname</th><th>Fichas</th></tr>";
         players.forEach(player => {
           html += `<tr><td>${player.nickname}</td><td>${player.saldo}</td></tr>`;
         });
         html += "</table>";
-        document.getElementById("playersList").innerHTML = html;
+        playersListDiv.innerHTML = html;
       });
       socket.on("connect", () => {
         saldoEl.textContent = "100";
