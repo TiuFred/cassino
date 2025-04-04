@@ -277,8 +277,8 @@
       <!-- Área da Roleta -->
       <div id="rouletteContainer">
         <canvas id="roletaCanvas" width="300" height="300"></canvas>
-        <!-- No modo multiplayer, o botão de girar não será exibido -->
-        <button id="btnGirar" style="display: none;">Girar Roleta</button>
+        <!-- Botão de girar só aparece no modo Single Player -->
+        <button id="btnGirar" style="display: inline-block;">Girar Roleta</button>
         <p id="resultado"></p>
       </div>
     </div>
@@ -296,7 +296,7 @@
      * VARIÁVEIS GLOBAIS E ESTADO
      ***********************************************/
     let modo = "single";  // "single" ou "multi"
-    let saldo = 100;      // Saldo local (Single Player; Multiplayer gerenciado pelo servidor)
+    let saldo = 100;      // Para Single Player; em Multiplayer, o saldo vem do servidor
     let totalJogadas = 0;
     let totalApostado = 0;
     let totalGanho = 0;
@@ -306,6 +306,7 @@
       "1-18": 0, "19-36": 0 
     };
     let bets = [];        // Apostas locais: { bet: "valor", amount: número }
+    let lastRoundBets = []; // Cópia das apostas do último round para estatísticas (multiplayer)
     let isSpinning = false;
     let socket = null;
     let countdown = 20;   // Timer para o giro automático (Multiplayer)
@@ -317,6 +318,7 @@
     const resultadoEl = document.getElementById("resultado");
     const timerEl = document.getElementById("timer");
     const playersListDiv = document.getElementById("playersList");
+    const btnGirar = document.getElementById("btnGirar");
 
     /************************************************
      * CONFIGURAÇÃO DO CANVAS – ROLETA E BOLINHA
@@ -328,10 +330,16 @@
     const wheelRadius = 130;
     const totalSegments = 37;
     const segmentAngle = (2 * Math.PI) / totalSegments;
-    let currentAngle = 0; // roleta fixa
     const ballTrackRadius = wheelRadius + 20;
     let ballAngle = 0; // Ângulo da bolinha
 
+    // Calcula o ângulo desejado para o número sorteado, normalizado para [0, 2π)
+    function desiredBallAngle(num) {
+      let angle = -Math.PI/2 + num * segmentAngle;
+      return ((angle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    }
+
+    // Desenha a roleta fixa e a bolinha girando
     function drawWheel() {
       for (let i = 0; i < totalSegments; i++) {
         const startAngle = i * segmentAngle;
@@ -385,7 +393,7 @@
      ***********************************************/
     function animateSpin(finalBallAngle, duration, callback) {
       const startBallAngle = ballAngle;
-      const extraRotations = 8;
+      const extraRotations = 8; // Para efeito realista
       const targetAngle = finalBallAngle + extraRotations * 2 * Math.PI;
       const startTime = performance.now();
       function animate(timestamp) {
@@ -409,7 +417,6 @@
     function updateTimer() {
       timerEl.textContent = "Próximo giro em: " + countdown + " segundos";
       if (modo === "multi" && countdown <= 0 && !isSpinning) {
-        // Dispara o giro automaticamente
         startMultiplayerRound();
         countdown = 20;
       } else if (countdown > 0) {
@@ -417,6 +424,18 @@
       }
     }
     setInterval(updateTimer, 1000);
+
+    /************************************************
+     * FUNÇÃO PARA ATUALIZAR ESTATÍSTICAS (ambos modos)
+     ***********************************************/
+    function roundComplete(winningNumber, roundBets) {
+      const roundBet = roundBets.reduce((acc, b) => acc + b.amount, 0);
+      totalJogadas++;
+      totalApostado += roundBet;
+      const winAmount = computeWin(roundBets, winningNumber);
+      totalGanho += winAmount;
+      return winAmount;
+    }
 
     /************************************************
      * LÓGICA DA MESA DE APOSTAS – APOSTA VIA PROMPT
@@ -459,7 +478,11 @@
     function startMultiplayerRound() {
       if (!isSpinning && socket) {
         isSpinning = true;
-        // Envia apostas para o servidor e dispara giro
+        // Salva uma cópia das apostas deste round para estatísticas
+        lastRoundBets = JSON.parse(JSON.stringify(bets));
+        const roundBet = lastRoundBets.reduce((acc, b) => acc + b.amount, 0);
+        totalJogadas++;
+        totalApostado += roundBet;
         bets.forEach(b => socket.emit("apostar", b));
         socket.emit("girar");
         bets = [];
@@ -470,22 +493,22 @@
     /************************************************
      * BOTÃO DE GIRO DA ROLETA (Single Player)
      ***********************************************/
-    document.getElementById("btnGirar").addEventListener("click", () => {
+    btnGirar.addEventListener("click", () => {
       if (isSpinning) return;
       isSpinning = true;
       resultadoEl.innerHTML = "";
       countdown = 20;
-      // Modo Multiplayer não usa esse botão; ele é para Single Player
+      // Se estiver no modo multiplayer, o botão não deve ser usado
       if (modo === "multi") return;
-      totalJogadas++;
+      // Modo Single Player
       const roundBet = bets.reduce((acc, b) => acc + b.amount, 0);
+      totalJogadas++;
       totalApostado += roundBet;
       const winningNumber = Math.floor(Math.random() * 37);
-      const finalBallAngle = -Math.PI/2 + winningNumber * segmentAngle;
+      const desiredAngle = desiredBallAngle(winningNumber);
       const duration = 2000;
-      animateSpin(finalBallAngle, duration, () => {
-        const winAmount = computeWin(bets, winningNumber);
-        totalGanho += winAmount;
+      animateSpin(desiredAngle, duration, () => {
+        const winAmount = roundComplete(winningNumber, bets);
         saldo -= roundBet;
         saldo += winAmount;
         saldoEl.textContent = saldo;
@@ -541,16 +564,21 @@
       gameDiv.style.display = "block";
       infoModo.textContent = "Modo: Multiplayer";
       // Oculta o botão de girar para Multiplayer
-      document.getElementById("btnGirar").style.display = "none";
+      btnGirar.style.display = "none";
       socket = io();
       socket.emit("setNickname", nickname);
       socket.on("resultado", (data) => {
-        clearTimeout();
+        // Em Multiplayer, as estatísticas locais podem ser atualizadas usando lastRoundBets
         const num = data.numeroSorteado;
         countdown = data.nextRoundIn !== undefined ? data.nextRoundIn : 20;
-        const finalBallAngle = -Math.PI/2 + num * segmentAngle;
-        animateSpin(finalBallAngle, 2000, () => {
-          resultadoEl.innerHTML = `Número sorteado: ${num} (Multiplayer)<br>Vencedores: ${data.winners.join(", ")}`;
+        const desiredAngle = desiredBallAngle(num);
+        animateSpin(desiredAngle, 2000, () => {
+          // Para estatísticas, computa ganhos com as apostas do último round
+          const winAmount = computeWin(lastRoundBets, num);
+          totalGanho += winAmount;
+          resultadoEl.innerHTML = `Número sorteado: ${num} (Multiplayer)<br>` +
+                                   `Vencedores: ${data.winners.join(", ")}<br>` +
+                                   `Você ganhou: ${winAmount} fichas!`;
           saldoEl.textContent = data.saldos[socket.id];
           isSpinning = false;
         });
@@ -577,8 +605,7 @@
       gameDiv.style.display = "block";
       infoModo.textContent = "Modo: Single Player";
       saldoEl.textContent = saldo;
-      // Exibe o botão de girar para Single Player
-      document.getElementById("btnGirar").style.display = "inline-block";
+      btnGirar.style.display = "inline-block";
     });
 
     /************************************************
@@ -591,6 +618,7 @@
       }
       bets = [];
       isSpinning = false;
+      btnGirar.style.display = "inline-block"; // Restaura o botão para Single Player
       lobbyDiv.style.display = "flex";
       gameDiv.style.display = "none";
     }
