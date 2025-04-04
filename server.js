@@ -11,22 +11,20 @@ const io = socketio(server);
 app.use(express.static("public"));
 
 // Estado do jogo: saldos, apostas e nicknames
-let saldos = {};    // Ex: { socketId: 100 }
-let apostas = {};   // Ex: { socketId: [ { bet: 'valor', amount: X }, ... ] }
-let nicknames = {}; // Ex: { socketId: "nickname" }
+let saldos = {};    // { socketId: 100 }
+let apostas = {};   // { socketId: [ { bet: 'valor', amount: X }, ... ] }
+let nicknames = {}; // { socketId: "nickname" }
 
 io.on("connection", (socket) => {
   console.log("Novo jogador conectado:", socket.id);
   saldos[socket.id] = 100;
 
-  // Define o nickname do jogador
   socket.on("setNickname", (nickname) => {
     nicknames[socket.id] = nickname;
     io.emit("playersList", getPlayersList());
     console.log(`Jogador ${socket.id} definiu nickname: ${nickname}`);
   });
 
-  // Recebe as apostas do jogador
   socket.on("apostar", (dados) => {
     if (!apostas[socket.id]) {
       apostas[socket.id] = [];
@@ -35,9 +33,8 @@ io.on("connection", (socket) => {
     console.log(`Jogador ${socket.id} apostou`, dados);
   });
 
-  // Evento para girar a roleta
   socket.on("girar", () => {
-    // Sorteia um número de 0 a 36
+    // Sorteia um número entre 0 e 36
     const numeroSorteado = Math.floor(Math.random() * 37);
     console.log(`Número sorteado: ${numeroSorteado}`);
 
@@ -47,32 +44,22 @@ io.on("connection", (socket) => {
       let ganhoTotal = 0;
       let totalApostado = apostas[id].reduce((acc, aposta) => acc + aposta.amount, 0);
 
-      // Verifica cada aposta do jogador
       apostas[id].forEach((aposta) => {
-        // Exemplo simples: se a aposta for exatamente igual ao número sorteado, ganha 35:1
         if (parseInt(aposta.bet) === numeroSorteado) {
           ganhoTotal += aposta.amount * 35;
         }
-        // Aqui você pode expandir a lógica para outras apostas (cor, par/ímpar, dúzias, etc.)
+        // Outras modalidades (cor, par/ímpar, etc.) podem ser implementadas aqui.
       });
-      // Atualiza o saldo do jogador
       saldos[id] -= totalApostado;
       saldos[id] += ganhoTotal;
       if (ganhoTotal > 0) {
         winners.push(nicknames[id] || id);
       }
     }
-
-    // Se ninguém ganhou, define "Ninguém"
     if (winners.length === 0) {
       winners.push("Ninguém");
     }
 
-    // Emite o resultado para todos os jogadores, incluindo:
-    // - numeroSorteado
-    // - saldos atualizados
-    // - winners: array com os nicknames dos vencedores
-    // - nextRoundIn: tempo para o próximo giro (20 segundos)
     io.emit("resultado", {
       numeroSorteado,
       saldos,
@@ -80,10 +67,7 @@ io.on("connection", (socket) => {
       nextRoundIn: 20
     });
 
-    // Emite a lista atualizada de jogadores
     io.emit("playersList", getPlayersList());
-
-    // Reinicia as apostas para a próxima rodada
     apostas = {};
   });
 
@@ -96,7 +80,6 @@ io.on("connection", (socket) => {
   });
 });
 
-// Função para montar a lista de jogadores
 function getPlayersList() {
   let players = [];
   for (let id in nicknames) {
