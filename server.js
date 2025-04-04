@@ -7,13 +7,13 @@ const app = express();
 const server = http.createServer(app);
 const io = socketio(server);
 
-// Serve os arquivos estáticos da pasta "public"
+// Serve arquivos estáticos da pasta "public"
 app.use(express.static("public"));
 
-// Estado do jogo: saldos, apostas e nicknames
-let saldos = {};    // { socketId: 100 }
-let apostas = {};   // { socketId: [ { bet: 'valor', amount: X }, ... ] }
-let nicknames = {}; // { socketId: "nickname" }
+// Estados do jogo: saldos, apostas e nicknames
+let saldos = {};    // Exemplo: { socketId: 100 }
+let apostas = {};   // Exemplo: { socketId: [ { bet: 'valor', amount: X }, ... ] }
+let nicknames = {}; // Exemplo: { socketId: "nickname" }
 
 io.on("connection", (socket) => {
   console.log("Novo jogador conectado:", socket.id);
@@ -45,11 +45,12 @@ io.on("connection", (socket) => {
       let totalApostado = apostas[id].reduce((acc, aposta) => acc + aposta.amount, 0);
 
       apostas[id].forEach((aposta) => {
+        // Simples: se a aposta for exatamente igual ao número sorteado, ganha 35:1
         if (parseInt(aposta.bet) === numeroSorteado) {
           ganhoTotal += aposta.amount * 35;
         }
-        // Outras modalidades (cor, par/ímpar, etc.) podem ser implementadas aqui.
       });
+
       saldos[id] -= totalApostado;
       saldos[id] += ganhoTotal;
       if (ganhoTotal > 0) {
@@ -66,7 +67,6 @@ io.on("connection", (socket) => {
       winners,
       nextRoundIn: 20
     });
-
     io.emit("playersList", getPlayersList());
     apostas = {};
   });
